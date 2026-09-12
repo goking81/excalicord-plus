@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Excalicord Studio</title>
+<link rel="stylesheet" href="/excalidraw-lib/index.css">
+<link rel="stylesheet" href="/recorder/recorder.css">
+<link rel="stylesheet" href="/recorder/post-editor.css">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+  #root { position: absolute; inset: 0; }
+  #boot-status {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    font: 14px/1.6 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: #1C2644; background: rgba(255,255,255,.96);
+    border: 1px solid rgba(28,38,68,.18); border-radius: 10px;
+    padding: 18px 26px; z-index: 99999; max-width: 72vw; text-align: center;
+  }
+  #boot-status .t { font-weight: 600; margin-bottom: 6px; }
+  #boot-status .d { color: #6B6A66; font-size: 12.5px; word-break: break-all; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="boot-status">
+  <div class="t">正在启动 Excalidraw…</div>
+  <div class="d">首次加载需要从 CDN 取 React，请稍候</div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react-dom": "https://esm.sh/react-dom@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
+    "@excalidraw/excalidraw": "https://esm.sh/@excalidraw/excalidraw@0.18.1?external=react,react-dom"
+  }
+}
+</script>
+
+<script type="module">
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { Excalidraw } from "@excalidraw/excalidraw";
+
+const RECORDER_SCRIPTS = [
+  "editor-core.js",
+  "editor-store.js",
+  "editor-io.js",
+  "rough-cut-core.js",
+  "smart-camera-core.js",
+  "native-bridge.js",
+  "studio-recorder.js",
+  "post-editor.js",
+];
+
+const statusBox = document.getElementById("boot-status");
+const statusTitle = statusBox.querySelector(".t");
+const statusDetail = statusBox.querySelector(".d");
+
+function setStatus(title, detail) {
+  statusTitle.textContent = title;
+  statusDetail.textContent = detail || "";
+}
+
+function hint(text) {
+  statusBox.style.display = "";
+  statusBox.querySelector(".t").textContent = "需要你手动恢复采集";
+  statusBox.querySelector(".d").textContent = text;
+}
+
+function loadScript(src) {
+  return new Promise(function (resolve, reject) {
+    const el = document.createElement("script");
+    el.src = src;
+    el.onload = function () { resolve(src); };
+    el.onerror = function () { reject(new Error("加载失败：" + src)); };
+    document.body.appendChild(el);
+  });
+}
+
+function waitForCanvas(timeoutMs) {
+  return new Promise(function (resolve) {
+    const started = Date.now();
+    (function poll() {
+      const canvas = document.querySelector(".excalidraw canvas");
+      if (canvas) { resolve(canvas); return; }
+      if (Date.now() - started > timeoutMs) { resolve(null); return; }
+      requestAnimationFrame(poll);
+    })();
+  });
+}
+
+async function boot() {
+  setStatus("正在启动 Excalidraw…", "挂载白板组件");
+  createRoot(document.getElementById("root")).render(
+    React.createElement(Excalidraw, { theme: "light", langCode: "zh-CN" })
+  );
+
+  setStatus("正在等待白板就绪…", "查找 excalidraw canvas");
+  const canvas = await waitForCanvas(20000);
+
+  if (!canvas) {
+    setStatus("未检测到白板画布", "继续加载录制器，但录制可能不可用");
+    await new Promise(function (r) { setTimeout(r, 1200); });
+  }
+
+  for (let i = 0; i < RECORDER_SCRIPTS.length; i += 1) {
+    const name = RECORDER_SCRIPTS[i];
+    setStatus("正在加载 More Excalicord…", name + " (" + (i + 1) + "/" + RECORDER_SCRIPTS.length + ")");
+    try {
+      await loadScript("/recorder/" + name);
+    } catch (error) {
+      setStatus("脚本加载失败", name + " — " + (error && error.message ? error.message : error));
+      return;
+    }
+  }
+
+  statusBox.style.display = "none";
+  window.__excalicordBootReady = true;
+  console.log("[excalicord-win] boot complete, canvasFound=" + !!canvas);
+}
+
+boot().catch(function (error) {
+  setStatus("启动失败", error && error.message ? error.message : String(error));
+});
+</script>
+</body>
+</html>
