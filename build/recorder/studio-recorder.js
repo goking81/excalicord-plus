@@ -1329,7 +1329,7 @@
     '<span class="ec-panel-brand-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M7.4 6.4h5.9c1 0 1.9.6 2.3 1.5l.4.9h.8a2.7 2.7 0 0 1 2.7 2.7v4.4a2.7 2.7 0 0 1-2.7 2.7H7a2.7 2.7 0 0 1-2.7-2.7v-4.4A2.7 2.7 0 0 1 7 8.8h.5l.6-1.2c.3-.8 1-1.2 1.9-1.2Z"/><circle cx="12" cy="13.8" r="3.2"/><path d="M17.2 10.8h.1"/></svg></span>';
   var sectionIconSlide =
     '<span class="ec-title-label"><span class="ec-section-icon ec-section-icon-slide" aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><rect x="3.2" y="4.2" width="13.6" height="9.4" rx="1.8"/><path d="M6 17h8"/><path d="M10 13.6V17"/></svg></span></span>';
-  var EC_BUILD_VERSION = "20260916-fullscreen-direct-track";
+  var EC_BUILD_VERSION = "20260917-whiteboard-recording-flow";
   var shortcutPrefix = /Mac|iPhone|iPad/i.test(navigator.platform || "") ? "⌥⇧" : "Alt+Shift+";
   function shortcutLabel(key) {
     return shortcutPrefix + key;
@@ -2342,7 +2342,8 @@
     sessionStorage.removeItem(PENDING_OVERVIEW_KEY);
   }
 
-  function navigateToFrame(frame) {
+  function navigateToFrame(frame, options) {
+    options = options || {};
     localStorage.setItem(ACTIVE_FRAME_KEY, frame.id);
     v011RecordFrameChange(frame, "navigation");
     if (window.__excalicordSuppressProps) window.__excalicordSuppressProps();
@@ -2359,11 +2360,13 @@
           "",
           location.pathname + "?frame=" + encodeURIComponent(frame.id),
         );
-        window.setTimeout(function () {
+        var finishNavigation = function () {
           renderFrameTabs();
           setSlideBusy(false);
           if (window.__excalicordSuppressProps) window.__excalicordSuppressProps();
-        }, 360);
+        };
+        if (options.immediate) finishNavigation();
+        else window.setTimeout(finishNavigation, 360);
         return;
       } catch (err) {
         console.warn("Excalicord Frame navigation fallback", err);
@@ -2419,17 +2422,32 @@
     toast("已新增幻灯片，已聚焦到新幻灯片");
   }
 
-  function switchFrame(id) {
+  function switchFrame(id, options) {
     if (slideBusy) return;
     var frame = getFrames().find(function (candidate) {
       return candidate.id === id;
     });
     if (!frame) return;
+    if (options && options.immediate) {
+      navigateToFrame(frame, { immediate: true });
+      return;
+    }
     setSlideBusy(true);
     toast("正在聚焦到幻灯片…");
     window.setTimeout(function () {
       navigateToFrame(frame);
     }, 120);
+  }
+
+  function stepRecordedWhiteboardFrame(delta) {
+    if (!state.rec.active || (scopeSel.value !== "canvas" && scopeSel.value !== "frame")) return false;
+    var frames = getFrames();
+    if (frames.length < 2) return false;
+    var currentIndex = frames.findIndex(function (frame) { return frame.id === currentFrameId(frames); });
+    var nextIndex = currentIndex + delta;
+    if (nextIndex < 0 || nextIndex >= frames.length) return false;
+    switchFrame(frames[nextIndex].id, { immediate: true });
+    return true;
   }
 
   function elementRight(element) {
@@ -6890,6 +6908,74 @@
     });
   }
 
+  function chooseRecordingScope() {
+    var dialogTitle = sourceModal.querySelector("h3");
+    var dialogHelp = sourceModal.querySelector(".ec-source-help");
+    var previousTitle = dialogTitle.textContent;
+    var previousHelp = dialogHelp.textContent;
+    var selectedScope = "";
+    var choices = [
+      ["canvas", "录白板全景", "完整记录白板画面，适合全局讲解", "白板"],
+      ["frame", "录当前幻灯片", "只录当前页；录制中按 ← / → 可立即翻页", "课程"],
+      ["screen", "录屏幕 / 窗口 / 标签页", "下一步由浏览器选择桌面、窗口或网页", "软件演示"],
+    ];
+    dialogTitle.textContent = "选择录制内容";
+    dialogHelp.textContent = "白板录制不会打开系统共享窗口；录屏幕或软件时才会打开。";
+    sourceOptions.innerHTML = "";
+    sourceConfirm.disabled = true;
+    var modes = document.createElement("div");
+    modes.className = "ec-source-modes";
+    choices.forEach(function (choice) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "ec-source-mode";
+      button.dataset.scope = choice[0];
+      var title = document.createElement("span");
+      title.className = "ec-source-mode-title";
+      title.textContent = choice[1];
+      var badge = document.createElement("span");
+      badge.className = "ec-source-mode-badge";
+      badge.textContent = choice[3];
+      var subtitle = document.createElement("span");
+      subtitle.className = "ec-source-mode-sub";
+      subtitle.textContent = choice[2];
+      button.appendChild(title);
+      button.appendChild(badge);
+      button.appendChild(subtitle);
+      button.addEventListener("click", function () {
+        selectedScope = choice[0];
+        modes.querySelectorAll(".ec-source-mode").forEach(function (item) {
+          item.classList.toggle("ec-active", item === button);
+        });
+        sourceConfirm.disabled = false;
+      });
+      modes.appendChild(button);
+    });
+    sourceOptions.appendChild(modes);
+    sourceModal.classList.add("ec-open");
+    sourceModal.setAttribute("aria-hidden", "false");
+    return new Promise(function (resolve) {
+      function cleanup(result) {
+        sourceCancel.removeEventListener("click", onCancel);
+        sourceConfirm.removeEventListener("click", onConfirm);
+        sourceModal.removeEventListener("click", onBackdrop);
+        closeSourcePicker();
+        sourceOptions.innerHTML = "";
+        dialogTitle.textContent = previousTitle;
+        dialogHelp.textContent = previousHelp;
+        resolve(result);
+      }
+      function onCancel() { cleanup(""); }
+      function onConfirm() { if (selectedScope) cleanup(selectedScope); }
+      function onBackdrop(ev) { if (ev.target === sourceModal) cleanup(""); }
+      sourceCancel.addEventListener("click", onCancel);
+      sourceConfirm.addEventListener("click", onConfirm);
+      sourceModal.addEventListener("click", onBackdrop);
+      var first = modes.querySelector("button");
+      if (first) first.focus({ preventScroll: true });
+    });
+  }
+
   function loadNativeSources() {
     var bridge = nativeBridge();
     if (!bridge || !state.rec.nativeAvailable) return Promise.resolve(false);
@@ -7043,15 +7129,8 @@
   }
 
   function revealPanelAfterRecordingStops() {
-    if (!hasCompletedRecording()) return;
-    setPanelOpen(true);
-    requestAnimationFrame(function () {
-      var resultSection = shadow.querySelector(".ec-recording-result");
-      if (!resultSection || !panel) return;
-      var top = Math.max(0, resultSection.offsetTop - 12);
-      if (typeof panel.scrollTo === "function") panel.scrollTo({ top: top, behavior: "smooth" });
-      else panel.scrollTop = top;
-    });
+    /* 录制结束保持白板可见；保存状态由右上角“文件”和轻提示呈现。 */
+    setPanelOpen(false);
   }
 
   function stopCursorSoundMix() {
@@ -8104,10 +8183,26 @@
       });
   }
 
-  function startRecording() {
+  function startRecording(scopeConfirmed) {
     if (state.countdown.active || state.rec.active || state.rec.browserStarting) return;
     if (state.rec.autoSavePromise) {
       toast("正在自动保存上一段原始录制，请稍候");
+      return;
+    }
+    if (!selectedProjectFolderAvailable()) {
+      toast("请先选择本次录制的保存文件夹");
+      chooseProjectFolder().then(function (chosen) {
+        if (chosen) startRecording(scopeConfirmed);
+      });
+      return;
+    }
+    if (!scopeConfirmed) {
+      chooseRecordingScope().then(function (scope) {
+        if (!scope) return;
+        scopeSel.value = scope;
+        scopeSel.dispatchEvent(new Event("change"));
+        startRecording(true);
+      });
       return;
     }
     if (scopeSel.value !== "screen") {
@@ -10002,8 +10097,17 @@
         return;
       }
     }
+    var target = ev.target;
+    var editingText = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+      || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable);
+    if (!editingText && (ev.key === "ArrowLeft" || ev.key === "ArrowRight")
+      && stepRecordedWhiteboardFrame(ev.key === "ArrowRight" ? 1 : -1)) {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      return;
+    }
     v011RecordKeyboard(ev);
-    if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLTextAreaElement || ev.target instanceof HTMLSelectElement) return;
+    if (editingText) return;
     var code = ev.code || "";
     var key = (ev.key || "").toLowerCase();
     var primaryShortcut = ev.altKey && ev.shiftKey && !ev.metaKey && !ev.ctrlKey;
