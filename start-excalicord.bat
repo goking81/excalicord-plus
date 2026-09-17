@@ -18,7 +18,7 @@ rem ============================================================
 
 setlocal
 cd /d "%~dp0"
-title Excalicord Studio - local server
+title Excalicord+ - local server
 
 set "NODEEXE="
 
@@ -51,7 +51,7 @@ if not defined NODEEXE (
 )
 
 echo.
-echo   Excalicord Studio - local server
+echo   Excalicord+ - local server
 echo   --------------------------------------------------------
 echo   Node : %NODEEXE%
 echo   URL  : http://127.0.0.1:5001/

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Excalicord Studio</title>
+<title>Excalicord+</title>
 <link rel="stylesheet" href="/excalidraw-lib/index.css">
 <link rel="stylesheet" href="/recorder/recorder.css">
 <link rel="stylesheet" href="/recorder/post-editor.css">
@@ -24,7 +24,7 @@
 <body>
 <div id="root"></div>
 <div id="boot-status">
-  <div class="t">正在启动 Excalidraw…</div>
+  <div class="t">正在启动 Excalicord+…</div>
   <div class="d">首次加载需要从 CDN 取 React，请稍候</div>
 </div>
 
@@ -55,6 +55,7 @@ const RECORDER_SCRIPTS = [
   "studio-recorder.js",
   "post-editor.js",
 ];
+const RECORDER_BUILD = "20260916-fullscreen-direct-track";
 
 const statusBox = document.getElementById("boot-status");
 const statusTitle = statusBox.querySelector(".t");
@@ -94,9 +95,15 @@ function waitForCanvas(timeoutMs) {
 }
 
 async function boot() {
-  setStatus("正在启动 Excalidraw…", "挂载白板组件");
+  setStatus("正在启动 Excalicord+…", "挂载白板组件");
   createRoot(document.getElementById("root")).render(
-    React.createElement(Excalidraw, { theme: "light", langCode: "zh-CN" })
+    React.createElement(Excalidraw, {
+      theme: "light",
+      langCode: "zh-CN",
+      excalidrawAPI: function (api) {
+        window.__excalicordExcalidrawAPI = api || null;
+      },
+    })
   );
 
   setStatus("正在等待白板就绪…", "查找 excalidraw canvas");
@@ -109,9 +116,9 @@ async function boot() {
 
   for (let i = 0; i < RECORDER_SCRIPTS.length; i += 1) {
     const name = RECORDER_SCRIPTS[i];
-    setStatus("正在加载 More Excalicord…", name + " (" + (i + 1) + "/" + RECORDER_SCRIPTS.length + ")");
+    setStatus("正在加载 Excalicord+…", name + " (" + (i + 1) + "/" + RECORDER_SCRIPTS.length + ")");
     try {
-      await loadScript("/recorder/" + name);
+      await loadScript("/recorder/" + name + "?v=" + RECORDER_BUILD);
     } catch (error) {
       setStatus("脚本加载失败", name + " — " + (error && error.message ? error.message : error));
       return;

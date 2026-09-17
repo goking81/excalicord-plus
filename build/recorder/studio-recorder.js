@@ -103,6 +103,10 @@
       composeCtx: null,
       composeVideo: null,
       composeRaf: null,
+      pendingDisplayStream: null,
+      captureCrop: { x: 0, y: 0, width: 1, height: 1 },
+      liveZoom: 1,
+      targetLiveZoom: 1,
       selectedDisplaySurface: "",
       usingDirectDisplay: false,
       nativeActive: false,
@@ -149,6 +153,9 @@
       backgroundStyle: "warm-gradient",
       customWidth: 1280,
       customHeight: 720,
+      frameRate: 30,
+      quality: "high",
+      captureCursor: "always",
       hideBubbleWhileRecording: false,
       hideDesktopIcons: false,
       retainPostAssets: true,
@@ -1322,7 +1329,7 @@
     '<span class="ec-panel-brand-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M7.4 6.4h5.9c1 0 1.9.6 2.3 1.5l.4.9h.8a2.7 2.7 0 0 1 2.7 2.7v4.4a2.7 2.7 0 0 1-2.7 2.7H7a2.7 2.7 0 0 1-2.7-2.7v-4.4A2.7 2.7 0 0 1 7 8.8h.5l.6-1.2c.3-.8 1-1.2 1.9-1.2Z"/><circle cx="12" cy="13.8" r="3.2"/><path d="M17.2 10.8h.1"/></svg></span>';
   var sectionIconSlide =
     '<span class="ec-title-label"><span class="ec-section-icon ec-section-icon-slide" aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><rect x="3.2" y="4.2" width="13.6" height="9.4" rx="1.8"/><path d="M6 17h8"/><path d="M10 13.6V17"/></svg></span></span>';
-  var EC_BUILD_VERSION = "20260906i-editable-webcam-track";
+  var EC_BUILD_VERSION = "20260916-fullscreen-direct-track";
   var shortcutPrefix = /Mac|iPhone|iPad/i.test(navigator.platform || "") ? "⌥⇧" : "Alt+Shift+";
   function shortcutLabel(key) {
     return shortcutPrefix + key;
@@ -1341,8 +1348,13 @@
     '  <button class="ec-view-tools-toggle" id="ec-view-tools-toggle" type="button" aria-label="白板控制"><svg viewBox="0 0 20 20" focusable="false" aria-hidden="true"><circle cx="10" cy="10" r="3.1"/><path d="M2.6 10s2.7-5 7.4-5 7.4 5 7.4 5-2.7 5-7.4 5-7.4-5-7.4-5Z"/></svg><span class="ec-rail-tooltip" role="tooltip">白板控制</span></button>',
     '  <div class="ec-slide-tabs" id="ec-slide-tabs" aria-label="切换幻灯片"></div>',
     '  <button class="ec-slide-add" id="ec-slide-add" aria-label="新增幻灯片">＋<span class="ec-rail-tooltip" role="tooltip">新增幻灯片</span></button>',
-    '  <button class="ec-launcher" aria-label="打开 more-excalicord"><span class="ec-launcher-icon" aria-hidden="true"><svg viewBox="0 0 28 28" focusable="false"><path class="ec-launcher-lens" d="M8.8 7.5h6.8c1.2 0 2.2.7 2.7 1.8l.5 1.1h.9c1.7 0 3.1 1.4 3.1 3.1v4.9c0 1.7-1.4 3.1-3.1 3.1H8.3c-1.7 0-3.1-1.4-3.1-3.1v-4.9c0-1.7 1.4-3.1 3.1-3.1h.6l.7-1.5c.4-.9 1.2-1.4 2.2-1.4Z"/><circle class="ec-launcher-core" cx="14" cy="16" r="4.1"/><circle class="ec-launcher-dot" cx="21" cy="12" r="1.15"/></svg></span><span class="ec-rail-tooltip" role="tooltip">打开 more-excalicord</span></button>',
+    '  <button class="ec-launcher" type="button" aria-hidden="true" tabindex="-1"></button>',
     '</nav>',
+    '<div class="ec-top-actions" aria-label="Excalicord+ 操作">',
+    '  <button class="ec-top-action" id="ec-top-settings" type="button">设置</button>',
+    '  <button class="ec-top-action" id="ec-top-save" type="button">文件</button>',
+    '  <button class="ec-top-record" id="ec-top-record" type="button">● 录制</button>',
+    '</div>',
     '<div class="ec-view-tools" id="ec-view-tools" role="dialog" aria-label="白板控制" aria-hidden="true">',
     '  <div class="ec-view-tools-head"><div><strong>白板控制</strong><small>视图与设置</small></div><button id="ec-view-tools-close" type="button" title="关闭白板控制">×</button></div>',
     '  <div class="ec-control-tabs" role="tablist" aria-label="白板控制分类">',
@@ -1421,10 +1433,9 @@
     '  <div class="ec-slide-bulkbar" id="ec-slide-bulkbar" aria-hidden="true"><strong id="ec-slide-selected-count">已选 0 页</strong><div><button id="ec-slide-select-all" type="button">全选</button><button id="ec-slide-clear-selection" type="button">取消选择</button><button class="ec-slide-bulk-delete" id="ec-slide-bulk-delete" type="button">删除</button></div></div>',
     '  <div class="ec-slide-grid" id="ec-slide-grid"></div>',
     '</div>',
-    '<div class="ec-panel" role="dialog" aria-label="more-excalicord">',
-    '  <h2 class="ec-panel-header"><span class="ec-panel-title">' + panelBrandIcon + '<span>more-excalicord</span></span><button class="ec-panel-collapse" id="ec-panel-collapse" type="button" title="关闭面板（Esc）" aria-label="关闭 more-excalicord 面板，快捷键 Esc">×</button></h2>',
-    '  <p class="ec-sub">白板 + 摄像头 + 提词器，录制原始素材（本地运行，不上传）</p>',
-    '  <div class="ec-section">',
+    '<div class="ec-panel" role="dialog" aria-label="录制设置">',
+    '  <h2 class="ec-panel-header"><span class="ec-panel-title">' + panelBrandIcon + '<span>录制设置</span></span><button class="ec-panel-collapse" id="ec-panel-collapse" type="button" title="关闭设置（Esc）" aria-label="关闭录制设置，快捷键 Esc">×</button></h2>',
+    '  <div class="ec-section ec-project-section">',
     '    <div class="ec-section-title"><span class="ec-title-label"><span class="ec-section-icon ec-section-icon-slide" aria-hidden="true">▣</span><span>项目</span></span></div>',
     '    <div class="ec-project-card" id="ec-project-card">',
     '      <div class="ec-project-summary">',
@@ -1450,7 +1461,7 @@
     '      <p class="ec-project-status ec-status-info" id="ec-project-status" role="status" hidden aria-hidden="true"><span class="ec-project-status-icon" aria-hidden="true">i</span><span class="ec-project-status-text"></span></p>',
     '    </div>',
     "  </div>",
-    '  <div class="ec-section">',
+    '  <div class="ec-section ec-tele-section">',
     '    <div class="ec-section-title"><span class="ec-title-label"><span class="ec-section-icon ec-section-icon-tele" aria-hidden="true">Aa</span><span>提词器 / 讲稿</span></span></div>',
     '    <div class="ec-row"><label>面板</label><button class="ec-btn ec-btn-ghost" id="ec-tele-toggle" style="flex:1">打开提词器</button></div>',
     '    <div class="ec-row"><label>隐藏</label><label class="ec-toggle"><input type="checkbox" id="ec-tele-hide"/> 录制时隐藏（不入镜）</label></div>',
@@ -1458,7 +1469,7 @@
     '    <p class="ec-sub" id="ec-script-status">讲稿仅供提词；逐字稿和字幕以录音为准。</p>',
     "  </div>",
     '  <div class="ec-section ec-camera-section">',
-    '    <div class="ec-section-title"><span class="ec-title-label"><span class="ec-section-icon ec-section-icon-camera" aria-hidden="true">◉</span><span>摄像头与麦克风</span></span></div>',
+    '    <div class="ec-section-title"><span class="ec-title-label"><span class="ec-section-icon ec-section-icon-camera" aria-hidden="true">◉</span><span>摄像头</span></span></div>',
     '    <div class="ec-row"><label>启用</label><label class="ec-toggle"><input type="checkbox" id="ec-cam-enable" checked/> 摄像头画中画</label></div>',
     '    <div class="ec-row ec-mic-row" id="ec-mic-row"><label>麦克风</label><select id="ec-mic-device"><option value="">默认麦克风</option></select><div class="ec-mic-meter" id="ec-mic-meter" role="meter" aria-label="麦克风实时音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="ec-mic-bar" id="ec-mic-bar"></div><div class="ec-mic-wave" id="ec-mic-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><span class="ec-value ec-mic-status ec-mic-status-idle" id="ec-mic-status" role="status" aria-label="打开面板后会实时检测麦克风" title="打开面板后会实时检测麦克风"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8.25" y="3.25" width="7.5" height="11.5" rx="3.75"></rect><path d="M5.75 11.5v.75a6.25 6.25 0 0 0 12.5 0v-.75M12 18.5v2.25M9.25 20.75h5.5"></path></svg></span></div>',
     '    <div class="ec-row"><label>合成</label><label class="ec-toggle"><input type="checkbox" id="ec-compose" checked title="录制时把摄像头圆框直接合成进视频文件，不依赖屏幕里的气泡位置"/> 摄像头合成进视频</label></div>',
@@ -1473,13 +1484,15 @@
     '    </div>',
     "  </div>",
     '  <div class="ec-section ec-recording-settings">',
-    '    <div class="ec-section-title">' + sectionIconRecord.replace("<span>录制</span>", "<span>录制设置</span>") + "</div>",
+    '    <div class="ec-section-title">' + sectionIconRecord.replace("<span>录制</span>", "<span>画布</span>") + "</div>",
     '    <div class="ec-row"><label>画幅</label><select id="ec-ratio"><option value="youtube">B站 / YouTube 16:9</option><option value="wechat-video">视频号 / 小红书 9:16</option><option value="square">小红书 / 社媒 1:1</option><option value="slides">课件 / 投屏 4:3</option><option value="custom">自定义尺寸…</option></select><span class="ec-value" id="ec-ratio-v">1920×1080</span></div>',
     '    <div class="ec-row ec-custom-size-row" id="ec-custom-size-row" style="display:none"><label>自定义</label><input id="ec-custom-width" type="number" min="320" max="7680" step="2" value="1280" aria-label="自定义宽度"/><span class="ec-size-separator">×</span><input id="ec-custom-height" type="number" min="320" max="7680" step="2" value="720" aria-label="自定义高度"/></div>',
-    '    <div class="ec-row"><label>范围</label><select id="ec-scope"><option value="screen">选择的屏幕/窗口</option><option value="canvas">白板全景</option><option value="frame">当前幻灯片聚焦</option></select></div>',
+    '    <div class="ec-row"><label>范围</label><select id="ec-scope"><option value="screen">屏幕 / 窗口 / 标签页</option><option value="canvas">白板全景</option><option value="frame">当前幻灯片聚焦</option></select></div>',
     '    <div id="ec-native-status-row" style="display:none"><span id="ec-native-status" class="ec-native-status">检测中…</span></div>',
     '    <div id="ec-native-source-row" style="display:none"><select id="ec-native-source"><option value="display:">自动选择主显示器</option></select></div>',
     '    <div class="ec-row"><label>格式</label><select id="ec-format"><option value="auto">自动（优先 MP4）</option><option value="video/mp4">MP4</option><option value="video/webm">WebM</option></select></div>',
+    '    <div class="ec-row"><label>帧率</label><select id="ec-frame-rate"><option value="24">24 FPS</option><option value="30" selected>30 FPS</option><option value="60">60 FPS</option></select><select id="ec-quality" aria-label="视频质量"><option value="standard">标准</option><option value="high" selected>高质量</option><option value="ultra">超清</option></select></div>',
+    '    <div class="ec-row"><label>鼠标</label><select id="ec-capture-cursor"><option value="always">显示鼠标</option><option value="never">隐藏鼠标</option></select></div>',
     '    <div class="ec-row"><label>背景</label><select id="ec-bg-style"><option value="warm-gradient">暖色渐变</option><option value="paper">纸张纹理</option><option value="dark">深色舞台</option><option value="solid">纯色</option></select><input type="color" id="ec-bg" value="#f4f1ea" title="纯色或渐变主色"/></div>',
     '    <div class="ec-row"><label>桌面</label><label class="ec-toggle"><input type="checkbox" id="ec-hide-desktop-icons"/> 隐藏桌面图标</label></div>',
     '    <p class="ec-sub" id="ec-hide-desktop-note" style="margin:2px 0 0;display:none">录制整个屏幕时隐藏；停止录制、启动失败或录制组件重启后自动恢复。</p>',
@@ -1487,7 +1500,7 @@
     '    <p class="ec-sub" id="ec-retain-post-assets-note" style="margin:2px 0 0">默认开启：主视频保留纯屏幕，摄像头独立保存，录后可调整位置、大小和形状；关闭后人像会直接写入原片。</p>',
     "  </div>",
     '  <div class="ec-section ec-advanced-section">',
-    '    <details class="ec-advanced-effects">',
+    '    <details class="ec-advanced-effects" open>',
     '      <summary><span>录制效果</span><small>智能镜头、光标、人像和补光</small></summary>',
     '      <div class="ec-advanced-effects-body">',
     '    <section class="ec-effect-card ec-effect-card-camera" aria-labelledby="ec-effect-camera-title">',
@@ -1554,11 +1567,13 @@
     '    <p class="ec-output-hint" id="ec-output-hint" role="status" hidden></p>',
     '    <div class="ec-row ec-export-row" style="margin-top:4px"><label style="flex:0 0 auto">视频文件</label><button class="ec-btn ec-btn-ghost" id="ec-export" style="flex:1">保存录制</button><button class="ec-btn ec-btn-ghost" id="ec-export-open">编辑原始录制</button></div>',
     "  </div>",
+    '  <div class="ec-settings-footer"><button class="ec-btn ec-btn-success" id="ec-settings-done" type="button">完成</button></div>',
     "</div>",
     '<div class="ec-mini-recorder" id="ec-mini-recorder" role="toolbar" aria-label="录制控制" aria-hidden="true">',
     '  <span class="ec-mini-drag" id="ec-mini-drag" role="button" tabindex="0" title="拖动录制控制条" aria-label="拖动录制控制条"><span aria-hidden="true">⠿</span></span>',
     '  <span class="ec-mini-status" aria-label="录制时间"><span class="ec-mini-dot" id="ec-mini-indicator" aria-hidden="true"></span><span class="ec-mini-timer" id="ec-mini-timer">00:00</span></span>',
     '  <button type="button" class="ec-mini-btn ec-mini-tele" id="ec-mini-tele" title="打开提示词" aria-label="打开提示词" aria-pressed="false"><span class="ec-mini-tele-icon" aria-hidden="true">Aa</span><span class="ec-mini-tele-label">提示词</span></button>',
+    '  <span class="ec-mini-zoom" aria-label="演示聚焦缩放"><button type="button" class="ec-mini-zoom-btn" id="ec-mini-zoom-out" title="缩小演示画面">−</button><output id="ec-mini-zoom-value">100%</output><button type="button" class="ec-mini-zoom-btn" id="ec-mini-zoom-in" title="放大演示画面">＋</button><button type="button" class="ec-mini-zoom-reset" id="ec-mini-zoom-reset" title="恢复原比例">1:1</button></span>',
     '  <button type="button" class="ec-mini-btn ec-mini-pause" id="ec-mini-pause" title="暂停或继续录制"><span class="ec-mini-btn-icon" aria-hidden="true">Ⅱ</span><span id="ec-mini-pause-label">暂停</span></button>',
     '  <button type="button" class="ec-mini-btn ec-mini-stop" id="ec-mini-stop" title="停止录制"><span class="ec-mini-stop-icon" aria-hidden="true"></span><span>停止</span></button>',
     '</div>',
@@ -1569,6 +1584,13 @@
     '    <p class="ec-source-help">先选择一种录制方式；下方只显示该方式需要的说明或候选来源。</p>',
     '    <div class="ec-source-options" id="ec-source-options"></div>',
     '    <div class="ec-source-actions"><button class="ec-btn ec-btn-ghost" id="ec-source-cancel">取消</button><button class="ec-btn ec-btn-success" id="ec-source-confirm">确认录制</button></div>',
+    '  </div>',
+    '</div>',
+    '<div class="ec-capture-frame-modal" id="ec-capture-frame-modal" aria-hidden="true">',
+    '  <div class="ec-capture-frame-dialog" role="dialog" aria-modal="true" aria-label="框选最终录制画面">',
+    '    <div class="ec-capture-frame-head"><div><h3>框选最终录制画面</h3><p>拖动取景框决定成片范围；框线和控制器不会录入视频。</p></div><output id="ec-capture-frame-size">—</output></div>',
+    '    <div class="ec-capture-stage" id="ec-capture-stage"><video id="ec-capture-preview" autoplay muted playsinline></video><div class="ec-capture-shade" id="ec-capture-shade"></div><div class="ec-capture-frame" id="ec-capture-frame" tabindex="0" aria-label="录制取景框"><i data-handle="nw"></i><i data-handle="ne"></i><i data-handle="sw"></i><i data-handle="se"></i></div></div>',
+    '    <div class="ec-capture-frame-actions"><button class="ec-btn ec-btn-ghost" id="ec-capture-frame-cancel" type="button">取消</button><button class="ec-btn ec-btn-success" id="ec-capture-frame-confirm" type="button">开始录制</button></div>',
     '  </div>',
     '</div>',
   ].join("");
@@ -3879,7 +3901,6 @@
   function ensureDefaultFrameIfEmpty() {
     var api = getLiveExcalidrawAPI();
     if (!api || slideBusy) return;
-    if (localStorage.getItem(AUTO_DEFAULT_SLIDE_KEY) === "0") return;
     var elements;
     try {
       elements = api.getSceneElementsIncludingDeleted();
@@ -5273,6 +5294,9 @@
   var nativeSourceRow = shadow.getElementById("ec-native-source-row");
   var nativeSourceSel = shadow.getElementById("ec-native-source");
   var formatSel = shadow.getElementById("ec-format");
+  var frameRateSel = shadow.getElementById("ec-frame-rate");
+  var qualitySel = shadow.getElementById("ec-quality");
+  var captureCursorSel = shadow.getElementById("ec-capture-cursor");
   var bgStyleSel = shadow.getElementById("ec-bg-style");
   var bgInput = shadow.getElementById("ec-bg");
   var composeChk = shadow.getElementById("ec-compose");
@@ -5306,6 +5330,18 @@
   var sourceOptions = shadow.getElementById("ec-source-options");
   var sourceCancel = shadow.getElementById("ec-source-cancel");
   var sourceConfirm = shadow.getElementById("ec-source-confirm");
+  var captureFrameModal = shadow.getElementById("ec-capture-frame-modal");
+  var captureStage = shadow.getElementById("ec-capture-stage");
+  var capturePreview = shadow.getElementById("ec-capture-preview");
+  var captureFrame = shadow.getElementById("ec-capture-frame");
+  var captureShade = shadow.getElementById("ec-capture-shade");
+  var captureFrameSize = shadow.getElementById("ec-capture-frame-size");
+  var captureFrameCancel = shadow.getElementById("ec-capture-frame-cancel");
+  var captureFrameConfirm = shadow.getElementById("ec-capture-frame-confirm");
+  var miniZoomOut = shadow.getElementById("ec-mini-zoom-out");
+  var miniZoomIn = shadow.getElementById("ec-mini-zoom-in");
+  var miniZoomReset = shadow.getElementById("ec-mini-zoom-reset");
+  var miniZoomValue = shadow.getElementById("ec-mini-zoom-value");
   var sourcePickerMode = "system";
   var lastDisplaySourceValue = "display:";
   var lastWindowSourceValue = "";
@@ -5401,6 +5437,49 @@
     ratioV.textContent = r[0] + "×" + r[1];
     if (customSizeRow) customSizeRow.style.display = ratioSel.value === "custom" ? "flex" : "none";
   }
+
+  /* “画幅”是白板幻灯片的画布比例；屏幕/窗口录制始终沿用采集源本身的尺寸。 */
+  function canvasFrameSizeForRatio() {
+    var size = recordingSize();
+    var ratio = size[0] / Math.max(1, size[1]);
+    if (ratio >= 1) return { width: 1600, height: Math.round(1600 / ratio) };
+    return { width: Math.round(1600 * ratio), height: 1600 };
+  }
+
+  function applyCanvasRatioToSlides() {
+    var api = getLiveExcalidrawAPI();
+    if (!api) return false;
+    var elements;
+    try { elements = api.getSceneElementsIncludingDeleted(); } catch (err) { return false; }
+    elements = (elements || []).map(function (element) {
+      return element ? Object.assign({}, element) : element;
+    });
+    var frames = elements.filter(function (element) {
+      return element && element.type === "frame" && !element.isDeleted;
+    });
+    if (!frames.length) return false;
+    var next = canvasFrameSizeForRatio();
+    var now = Date.now();
+    frames.forEach(function (frame) {
+      var oldWidth = Math.max(1, Number(frame.width) || 1600);
+      var oldHeight = Math.max(1, Number(frame.height) || 900);
+      frame.x = (Number(frame.x) || 0) + (oldWidth - next.width) / 2;
+      frame.y = (Number(frame.y) || 0) + (oldHeight - next.height) / 2;
+      frame.width = next.width;
+      frame.height = next.height;
+      frame.version = (Number(frame.version) || 1) + 1;
+      frame.versionNonce = randomNonce();
+      frame.updated = now;
+    });
+    if (!writeElementsSafe(elements)) return false;
+    persistSceneToServer(elements);
+    try { api.updateScene({ elements: elements }); } catch (err) { return false; }
+    renderFrameTabs();
+    var active = frames.find(function (frame) { return frame.id === currentFrameId(frames); });
+    if (active) window.setTimeout(function () { navigateToFrame(active); }, 0);
+    toast("所有幻灯片画布已调整为 " + next.width + "×" + next.height);
+    return true;
+  }
   function restoreV011RecordingSettings() {
     var savedScope = state.v011.recordingScope || "screen";
     var savedRatio = state.v011.recordingRatio || "youtube";
@@ -5430,6 +5509,7 @@
   ratioSel.addEventListener("change", function () {
     updateRatio();
     state.v011.recordingRatio = recordingRatioValue();
+    applyCanvasRatioToSlides();
     v011ScheduleSave("recording-ratio");
   });
   [customWidthInput, customHeightInput].forEach(function (input) {
@@ -5442,8 +5522,30 @@
       updateRatio();
       v011ScheduleSave("recording-custom-size");
     });
+    input.addEventListener("change", applyCanvasRatioToSlides);
   });
   updateRatio();
+  if (frameRateSel) {
+    frameRateSel.value = String(state.settings.frameRate || 30);
+    frameRateSel.addEventListener("change", function () {
+      state.settings.frameRate = recordingFrameRate();
+      v011ScheduleSave("recording-frame-rate");
+    });
+  }
+  if (qualitySel) {
+    qualitySel.value = state.settings.quality || "high";
+    qualitySel.addEventListener("change", function () {
+      state.settings.quality = qualitySel.value || "high";
+      v011ScheduleSave("recording-quality");
+    });
+  }
+  if (captureCursorSel) {
+    captureCursorSel.value = state.settings.captureCursor || "always";
+    captureCursorSel.addEventListener("change", function () {
+      state.settings.captureCursor = captureCursorSel.value === "never" ? "never" : "always";
+      v011ScheduleSave("recording-cursor-capture");
+    });
+  }
   if (bgStyleSel) bgStyleSel.value = state.settings.backgroundStyle || "warm-gradient";
   if (bgInput) bgInput.value = state.settings.background || "#f4f1ea";
   if (bgStyleSel) {
@@ -5749,9 +5851,9 @@
     });
   }
 
-  function webcamSidecarSourceStream() {
+  function webcamSidecarSourceStream(preferRawCamera) {
     var processed = bubble.querySelector("canvas");
-    if (processed && processed.captureStream && processed.width && processed.height) {
+    if (!preferRawCamera && processed && processed.captureStream && processed.width && processed.height) {
       return processed.captureStream(30);
     }
     var track = state.camera.stream && state.camera.stream.getVideoTracks().find(function (item) {
@@ -5761,7 +5863,7 @@
     return new MediaStream([track.clone ? track.clone() : track]);
   }
 
-  function startWebcamSidecarRecording() {
+  function startWebcamSidecarRecording(preferRawCamera) {
     state.rec.webcamSidecarChunks = [];
     state.rec.webcamBlob = null;
     state.rec.webcamExt = "";
@@ -5770,7 +5872,7 @@
     state.rec.webcamSidecarActive = false;
     state.rec.webcamSidecarPromise = null;
     if (!shouldRecordWebcamSidecar()) return false;
-    var stream = webcamSidecarSourceStream();
+    var stream = webcamSidecarSourceStream(preferRawCamera);
     if (!stream || !stream.getVideoTracks().length) return false;
     var mime = pickMimeType(false);
     var options = { mimeType: mime, videoBitsPerSecond: 2200000 };
@@ -7212,14 +7314,52 @@
 
   function drawDisplaySource(ctx, video, W, H) {
     if (!video.videoWidth) return false;
+    var base = state.rec.captureCrop || { x: 0, y: 0, width: 1, height: 1 };
+    state.rec.liveZoom += (state.rec.targetLiveZoom - state.rec.liveZoom) * 0.16;
+    if (Math.abs(state.rec.liveZoom - 1) < 0.005) state.rec.liveZoom = 1;
+    var zoom = clamp(state.rec.liveZoom || 1, 1, 3);
+    var cropWidth = base.width / zoom;
+    var cropHeight = base.height / zoom;
+    var centerX = base.x + base.width / 2;
+    var centerY = base.y + base.height / 2;
+    var crop = {
+      sx: clamp(centerX - cropWidth / 2, base.x, base.x + base.width - cropWidth) * video.videoWidth,
+      sy: clamp(centerY - cropHeight / 2, base.y, base.y + base.height - cropHeight) * video.videoHeight,
+      sw: cropWidth * video.videoWidth,
+      sh: cropHeight * video.videoHeight,
+    };
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, W, H);
     return drawFittedSource(
       ctx,
       video,
-      { sx: 0, sy: 0, sw: video.videoWidth, sh: video.videoHeight },
+      crop,
       W,
       H,
-      "cover",
+      "contain",
     );
+  }
+
+  function displayRecordingSize(video, trackSettings) {
+    var crop = state.rec.captureCrop || { x: 0, y: 0, width: 1, height: 1 };
+    var sourceWidth = Number(trackSettings && trackSettings.width)
+      || Number(video && video.videoWidth)
+      || Number(capturePreview && capturePreview.videoWidth)
+      || recordingSize()[0];
+    var sourceHeight = Number(trackSettings && trackSettings.height)
+      || Number(video && video.videoHeight)
+      || Number(capturePreview && capturePreview.videoHeight)
+      || recordingSize()[1];
+    return [
+      clamp(Math.round(sourceWidth * crop.width), 2, 7680),
+      clamp(Math.round(sourceHeight * crop.height), 2, 7680),
+    ];
+  }
+
+  function isUnmodifiedDisplayCapture() {
+    var crop = state.rec.captureCrop || { x: 0, y: 0, width: 1, height: 1 };
+    var zoom = Number(state.rec.targetLiveZoom) || 1;
+    return crop.x <= 0.001 && crop.y <= 0.001 && crop.width >= 0.999 && crop.height >= 0.999 && zoom <= 1.001;
   }
 
   function drawRecordingBackground(ctx, W, H) {
@@ -7456,7 +7596,7 @@
       }
       ctx.restore();
     }
-    if (cursorHighlightChk.checked && state.rec.active) {
+    if (cursorHighlightChk.checked && state.rec.active && (scope === "canvas" || scope === "frame")) {
       var cx0 = state.cursor.x;
       var cy0 = state.cursor.y;
       var canvasRect2 = sceneCanvasRect();
@@ -7675,6 +7815,161 @@
     tick();
   }
 
+  function recordingFrameRate() {
+    return clamp(Number(frameRateSel && frameRateSel.value) || 30, 24, 60);
+  }
+
+  function recordingVideoBitrate() {
+    var quality = qualitySel && qualitySel.value ? qualitySel.value : "high";
+    return quality === "ultra" ? 16000000 : quality === "standard" ? 4500000 : 8000000;
+  }
+
+  function updateLiveZoomUI() {
+    if (miniZoomValue) miniZoomValue.textContent = Math.round(state.rec.targetLiveZoom * 100) + "%";
+  }
+
+  function setLiveZoom(nextZoom) {
+    state.rec.targetLiveZoom = clamp(Number(nextZoom) || 1, 1, 3);
+    updateLiveZoomUI();
+  }
+
+  function displayConstraints() {
+    return {
+      video: {
+        frameRate: { ideal: recordingFrameRate() },
+        displaySurface: "monitor",
+        cursor: state.settings.captureCursor === "never" ? "never" : "always",
+      },
+      audio: true,
+      preferCurrentTab: false,
+      selfBrowserSurface: "exclude",
+      surfaceSwitching: "include",
+      monitorTypeSurfaces: "include",
+      systemAudio: "include",
+    };
+  }
+
+  function resetCaptureCrop() {
+    state.rec.captureCrop = {
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+    };
+    state.rec.liveZoom = 1;
+    setLiveZoom(1);
+    renderCaptureCrop();
+  }
+
+  function renderCaptureCrop() {
+    if (!captureStage || !captureFrame || !capturePreview.videoWidth) return;
+    var crop = state.rec.captureCrop;
+    captureFrame.style.left = (crop.x * 100) + "%";
+    captureFrame.style.top = (crop.y * 100) + "%";
+    captureFrame.style.width = (crop.width * 100) + "%";
+    captureFrame.style.height = (crop.height * 100) + "%";
+    if (captureFrameSize) {
+      captureFrameSize.textContent = Math.round(capturePreview.videoWidth * crop.width) + " × " + Math.round(capturePreview.videoHeight * crop.height);
+    }
+  }
+
+  function clampCaptureCrop(crop) {
+    crop.width = clamp(crop.width, 0.08, 1);
+    crop.height = clamp(crop.height, 0.08, 1);
+    crop.x = clamp(crop.x, 0, 1 - crop.width);
+    crop.y = clamp(crop.y, 0, 1 - crop.height);
+    state.rec.captureCrop = crop;
+    renderCaptureCrop();
+  }
+
+  function closeCaptureFrameModal(confirmed) {
+    var resolve = state.rec.captureFrameResolve;
+    state.rec.captureFrameResolve = null;
+    captureFrameModal.classList.remove("ec-open");
+    captureFrameModal.setAttribute("aria-hidden", "true");
+    try { capturePreview.pause(); } catch (e) {}
+    capturePreview.srcObject = null;
+    if (!confirmed && state.rec.pendingDisplayStream) {
+      state.rec.pendingDisplayStream.getTracks().forEach(function (track) { track.stop(); });
+      state.rec.pendingDisplayStream = null;
+    }
+    if (resolve) resolve(!!confirmed);
+  }
+
+  function frameDisplayForRecording(stream) {
+    return new Promise(function (resolve, reject) {
+      state.rec.pendingDisplayStream = stream;
+      var displayTrack = stream.getVideoTracks()[0];
+      if (displayTrack) {
+        displayTrack.addEventListener("ended", function () {
+          if (state.rec.captureFrameResolve) closeCaptureFrameModal(false);
+        }, { once: true });
+      }
+      function ready() {
+        if (!capturePreview.videoWidth || !capturePreview.videoHeight) return;
+        captureStage.style.aspectRatio = capturePreview.videoWidth + " / " + capturePreview.videoHeight;
+        resetCaptureCrop();
+        captureFrameModal.classList.add("ec-open");
+        captureFrameModal.setAttribute("aria-hidden", "false");
+        capturePreview.play().catch(function () {});
+        resolve(new Promise(function (done) { state.rec.captureFrameResolve = done; }));
+      }
+      capturePreview.addEventListener("loadedmetadata", ready, { once: true });
+      capturePreview.addEventListener("error", function () { reject(new Error("无法预览所选录制来源")); }, { once: true });
+      capturePreview.srcObject = stream;
+    });
+  }
+
+  function requestFramedDisplay() {
+    return navigator.mediaDevices.getDisplayMedia(displayConstraints())
+      .then(function (stream) { return frameDisplayForRecording(stream); });
+  }
+
+  var captureGesture = null;
+  captureStage.addEventListener("pointerdown", function (event) {
+    if (!state.rec.captureFrameResolve) return;
+    var handle = event.target && event.target.dataset ? event.target.dataset.handle : "";
+    var stageRect = captureStage.getBoundingClientRect();
+    var crop = state.rec.captureCrop;
+    captureGesture = {
+      handle: handle || "move",
+      startX: event.clientX / stageRect.width,
+      startY: event.clientY / stageRect.height,
+      crop: { x: crop.x, y: crop.y, width: crop.width, height: crop.height },
+    };
+    captureStage.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+  captureStage.addEventListener("pointermove", function (event) {
+    if (!captureGesture) return;
+    var stageRect = captureStage.getBoundingClientRect();
+    var px = clamp((event.clientX - stageRect.left) / stageRect.width, 0, 1);
+    var py = clamp((event.clientY - stageRect.top) / stageRect.height, 0, 1);
+    var original = captureGesture.crop;
+    var next = { x: original.x, y: original.y, width: original.width, height: original.height };
+    if (captureGesture.handle === "move") {
+      next.x = clamp(original.x + (px - captureGesture.startX), 0, 1 - original.width);
+      next.y = clamp(original.y + (py - captureGesture.startY), 0, 1 - original.height);
+    } else {
+      var oppositeX = /w/.test(captureGesture.handle) ? original.x + original.width : original.x;
+      var oppositeY = /n/.test(captureGesture.handle) ? original.y + original.height : original.y;
+      next.x = Math.min(px, oppositeX);
+      next.y = Math.min(py, oppositeY);
+      next.width = Math.abs(px - oppositeX);
+      next.height = Math.abs(py - oppositeY);
+    }
+    clampCaptureCrop(next);
+  });
+  captureStage.addEventListener("pointerup", function () { captureGesture = null; });
+  captureStage.addEventListener("pointercancel", function () { captureGesture = null; });
+  captureFrameCancel.addEventListener("click", function () { closeCaptureFrameModal(false); });
+  captureFrameConfirm.addEventListener("click", function () { closeCaptureFrameModal(true); });
+
+  if (miniZoomOut) miniZoomOut.addEventListener("click", function () { setLiveZoom(state.rec.targetLiveZoom - 0.25); });
+  if (miniZoomIn) miniZoomIn.addEventListener("click", function () { setLiveZoom(state.rec.targetLiveZoom + 0.25); });
+  if (miniZoomReset) miniZoomReset.addEventListener("click", function () { setLiveZoom(1); });
+  updateLiveZoomUI();
+
   function startBrowserRecording() {
     if (state.rec.browserStarting) return;
     state.rec.browserStarting = true;
@@ -7685,11 +7980,32 @@
           return;
         }
         resetCompletedRecordingState();
-        requestMicAccess(function () {
-          doCountdown(function () {
-            _startRecordingInner();
+        requestMicAccess(function (granted) {
+          if (!granted) {
+            state.rec.browserStarting = false;
+            setPanelOpen(true);
+            return;
+          }
+          var begin = function () {
+            doCountdown(function () { _startRecordingInner(); });
+            state.rec.browserStarting = false;
+          };
+          if (scopeSel.value !== "screen") {
+            begin();
+            return;
+          }
+          requestFramedDisplay().then(function (confirmed) {
+            if (confirmed) begin();
+            else {
+              state.rec.browserStarting = false;
+              setPanelOpen(true);
+              toast("已取消录制取景");
+            }
+          }).catch(function (error) {
+            state.rec.browserStarting = false;
+            setPanelOpen(true);
+            toast("无法选择录制来源：" + (error && error.message ? error.message : error));
           });
-          state.rec.browserStarting = false;
         });
       })
       .catch(function (error) {
@@ -7794,12 +8110,6 @@
       toast("正在自动保存上一段原始录制，请稍候");
       return;
     }
-    if (!selectedProjectFolderAvailable()) {
-      setPanelOpen(true);
-      updateV011ProjectStatus("开始录制前请先设置项目文件夹；本次录制及附带内容都会保存到该目录。");
-      toast("请先设置项目文件夹，再开始录制");
-      return;
-    }
     if (scopeSel.value !== "screen") {
       startBrowserRecording();
       return;
@@ -7865,7 +8175,7 @@
       state.rec.selectedDisplaySurface = scope;
       state.rec.usingDirectDisplay = false;
 
-      var vTrack = cv.captureStream(30).getVideoTracks()[0];
+      var vTrack = cv.captureStream(recordingFrameRate()).getVideoTracks()[0];
       var inputAudioTracks = [];
       if (state.mic.stream) {
         var micTracks = state.mic.stream.getAudioTracks();
@@ -7884,7 +8194,7 @@
 
       var hasAudioTracks = outputStream.getAudioTracks().length > 0;
       var mime = pickMimeType(hasAudioTracks);
-      var options = { mimeType: mime, videoBitsPerSecond: 8000000 };
+      var options = { mimeType: mime, videoBitsPerSecond: recordingVideoBitrate() };
       if (hasAudioTracks) options.audioBitsPerSecond = 128000;
       if (mime.indexOf("mp4") === -1) {
         if (formatSel.value === "video/mp4") {
@@ -7935,20 +8245,9 @@
     }
 
     /* --- screen scope: original flow with getDisplayMedia --- */
-    var constraints = {
-      video: {
-        frameRate: { ideal: 30 },
-        displaySurface: "monitor",
-      },
-      audio: true,
-      preferCurrentTab: false,
-      selfBrowserSurface: "exclude",
-      surfaceSwitching: "include",
-      monitorTypeSurfaces: "include",
-      systemAudio: "include",
-    };
-    navigator.mediaDevices
-      .getDisplayMedia(constraints)
+    var preparedDisplayStream = state.rec.pendingDisplayStream;
+    state.rec.pendingDisplayStream = null;
+    (preparedDisplayStream ? Promise.resolve(preparedDisplayStream) : navigator.mediaDevices.getDisplayMedia(displayConstraints()))
       .then(function (displayStream) {
         var displayTrack = displayStream.getVideoTracks()[0];
         var displaySettings = displayTrack && displayTrack.getSettings
@@ -7970,9 +8269,10 @@
           });
         }
         var outputStream = new MediaStream(directVideoTracks.concat(mixedBrowserAudioTracks(directAudioTracks)));
-        var isDesktopSurface =
-          displaySurface === "monitor" || displaySurface === "window";
-        var useComposedOutput = composeChk.checked && !isDesktopSurface;
+        /* 整个屏幕且未框选/缩放时，直接写入浏览器的显示轨道。
+           不能经过 requestAnimationFrame 的合成画布，否则切走本页会被浏览器降速而停在最后一帧。 */
+        var directFullMonitor = displaySurface === "monitor" && isUnmodifiedDisplayCapture();
+        var useComposedOutput = !directFullMonitor;
         state.rec.selectedDisplaySurface = displaySurface;
         state.rec.usingDirectDisplay = !useComposedOutput;
         state.rec.webcamCompositeBaked = !!(useComposedOutput && state.camera.enabled && state.camera.stream && !state.settings.retainPostAssets);
@@ -7980,13 +8280,11 @@
         if (displaySurface === "browser") {
           toast("当前采集源是浏览器标签页；录制桌面请在共享窗口中选择「整个屏幕」");
         } else if (displaySurface === "monitor") {
-          toast("已连接整个屏幕，切换到其他应用后仍会持续录制");
+          toast(directFullMonitor
+            ? "已连接整个屏幕；现在可切换到其他应用，画面会持续录制"
+            : "已连接整个屏幕；框选或演示缩放开启时，请让本页面保持运行");
         } else if (displaySurface === "window") {
           toast("已连接所选窗口；只有该窗口会被录制");
-        }
-
-        if (composeChk.checked && isDesktopSurface) {
-          toast("为保证离开或最小化浏览器后持续录制，桌面/窗口模式使用原始采集流");
         }
 
         /* [camera-pip-preview] 悬浮小窗此刻正在被采集范围内 —— 要提醒，否则成片里会多出一个摄像头 */
@@ -8000,7 +8298,9 @@
           }, { once: true });
         }
         if (useComposedOutput) {
-          var r = recordingSize();
+          /* 屏幕/窗口/标签页录制使用共享源（或用户框选范围）的原始比例；
+             白板“画幅”只影响白板与当前幻灯片录制。 */
+          var r = displayRecordingSize(null, displaySettings);
           var cv = document.createElement("canvas");
           cv.width = r[0];
           cv.height = r[1];
@@ -8010,10 +8310,11 @@
           video.playsInline = true;
           video.muted = true;
           video.srcObject = displayStream;
+          video.play().catch(function () {});
           state.rec.composeCanvas = cv;
           state.rec.composeCtx = ctx;
           state.rec.composeVideo = video;
-          var vTrack = cv.captureStream(30).getVideoTracks()[0];
+          var vTrack = cv.captureStream(recordingFrameRate()).getVideoTracks()[0];
           var audioTracks = displayStream.getAudioTracks().slice();
           if (state.mic.stream) {
             state.mic.stream.getAudioTracks().forEach(function (track) {
@@ -8033,10 +8334,11 @@
         }
         if (state.tele.hideWhileRecording && state.tele.open) setTelePanelOpen(false);
 
-        var hasIndependentWebcam = startWebcamSidecarRecording();
+        /* 整屏直录时摄像头也取原始轨道，避免后台页面影响画中画素材。 */
+        var hasIndependentWebcam = startWebcamSidecarRecording(directFullMonitor);
         var hasAudioTracks = outputStream.getAudioTracks().length > 0;
         var mime = pickMimeType(hasAudioTracks);
-        var options = { mimeType: mime, videoBitsPerSecond: 8000000 };
+        var options = { mimeType: mime, videoBitsPerSecond: recordingVideoBitrate() };
         if (hasAudioTracks) options.audioBitsPerSecond = 128000;
         if (mime.indexOf("mp4") === -1) {
           if (formatSel.value === "video/mp4") {
@@ -8629,7 +8931,7 @@
       target.document.write([
         "<!doctype html>",
         '<meta charset="utf-8">',
-        '<title>编辑原始录制 - more-excalicord</title>',
+        '<title>编辑原始录制 - Excalicord+</title>',
         '<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f7f6ff;color:#1f2937;font:16px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}.card{max-width:440px;padding:28px 32px;border-radius:24px;background:rgba(255,255,255,.86);box-shadow:0 24px 70px rgba(79,70,229,.18);border:1px solid rgba(129,140,248,.22)}h1{margin:0 0 12px;font-size:22px}.hint{color:#64748b;line-height:1.65}</style>',
         '<main class="card"><h1>编辑原始录制</h1><div class="hint">',
         String(message || "正在准备原始录制素材…"),
@@ -9747,6 +10049,10 @@
   var launcher = shadow.querySelector(".ec-launcher");
   var panel = shadow.querySelector(".ec-panel");
   var panelCollapse = shadow.getElementById("ec-panel-collapse");
+  var settingsDone = shadow.getElementById("ec-settings-done");
+  var topSettings = shadow.getElementById("ec-top-settings");
+  var topSave = shadow.getElementById("ec-top-save");
+  var topRecord = shadow.getElementById("ec-top-record");
   function setPanelOpen(open) {
     if (open) closeSlideOverview();
     var wasOpen = panel.classList.contains("ec-open");
@@ -9754,16 +10060,52 @@
     launcher.classList.toggle("ec-panel-open", !!open);
     if (open && !wasOpen) {
       panel.scrollTop = 0;
-      startMicPreview();
-    } else if (!open && wasOpen) {
-      stopMicPreview();
     }
     if (state.tele.open && !state.tele.userPositioned) requestAnimationFrame(layoutTeleprompter);
   }
   launcher.addEventListener("click", function () {
     setPanelOpen(!panel.classList.contains("ec-open"));
   });
+  topSettings.addEventListener("click", function () {
+    setPanelOpen(!panel.classList.contains("ec-open"));
+  });
+  function saveCompletedBrowserRecording() {
+    var save = function () {
+      return autoSaveBrowserRecording().then(function (saved) {
+        if (saved) toast("本次录制已保存到所选文件夹");
+        return saved;
+      });
+    };
+    if (selectedProjectFolderAvailable()) {
+      save();
+      return;
+    }
+    chooseProjectFolder()
+      .then(function (chosen) {
+        if (!chosen) return false;
+        return activateSelectedProjectFolder({ silent: true, source: "save-recording" });
+      })
+      .then(function (ready) {
+        if (ready !== false) return save();
+        return false;
+      });
+  }
+  topSave.addEventListener("click", function () {
+    if (state.rec.lastBlob) {
+      saveCompletedBrowserRecording();
+      return;
+    }
+    if (selectedProjectFolderAvailable()) {
+      projectWhiteboardSaveBtn.click();
+      return;
+    }
+    projectFolderChooseBtn.click();
+  });
+  topRecord.addEventListener("click", startRecording);
   panelCollapse.addEventListener("click", function () {
+    setPanelOpen(false);
+  });
+  settingsDone.addEventListener("click", function () {
     setPanelOpen(false);
   });
 

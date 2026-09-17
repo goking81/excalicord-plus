@@ -206,8 +206,8 @@
   }
 
   function safeExportName(projectId, extension) {
-    var base = String(projectId || "more-excalicord").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
-    return (base || "more-excalicord") + "-final." + String(extension || "mp4").replace(/[^A-Za-z0-9]/g, "");
+    var base = String(projectId || "excalicord-plus").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+    return (base || "excalicord-plus") + "-final." + String(extension || "mp4").replace(/[^A-Za-z0-9]/g, "");
   }
 
   return {
